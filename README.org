@@ -1,0 +1,72 @@
+* RFCS -- Because Engineering Workflows Are Hard.
+
+This is a project that lets you manage, review, read, and edit your engineering
+organisations RFCs, assuming that those are in a git repository and conform to
+some layout expectations.
+
+** Quick Start
+1. Clone repository
+2. Run =rake release=
+3. Run ~rfcs --version~ in your shell to check it's there._{unimplemented}
+
+** Why?
+Engineering documents, called "Request for Comments" after the IETF RFCs, are a
+relatively common feature of engineering organisations that need to coordinate
+things larger than a few pull requests or some Jira tickets. They're about the
+larger picture of a decision, architecture consequences and work to be done,
+potential concerns as much as potential solutions. They have other names like
+"Architecture Proposals", "Request for Discussion", but commonly end up
+with "RFC".
+
+Despite the name accurately describing /why/ they are written, they're most
+familiar to engineers as authoritative documents describing standards, like TCP,
+IRC or even just the language inside the documents themselves ([[https://datatracker.ietf.org/doc/html/rfc2119][RFC 2119]])
+
+These things are usually relatively-free-form blobs of text floating around in
+some sort of version controlled hosting method of blobs of text, most commonly
+something like Google Documents, more rarely git. Despite them being very much
+there to guide work and implementation, they're not really easy to work with.
+
+So here's a small tool that tries to make working with them easier, by bringing
+them to what programmers already work with a lot, the CLI.
+
+** How?
+The main assumption made is that your RFCs are stored and worked with in =git=.
+=rfcs= can either work by giving it a URL_{unimplemented} (either starting with
+=http[s]://= or with =git@=, though both are heuristics. If you need something
+else, please file an issue) or a local path to the check-out_{unimplemented}.
+
+The second assumption is that your RFCs are text files (currently recognised:
+=.md=, =.markdown=, =.org=, =.rst=, =.txt=)_{unimplemented}, and the third that
+they have numbers in them. The end result of recognised files looks something
+like =001.md=, or =rfc_1.org=, or =rfc-001.txt=, or
+=011-caches-are-bad-actually.rst=._{unimplemented}
+
+You will be able to tweak this behaviour via the config file,
+eventually._{unimplemented}
+
+** What can I do with this?
+The point is that creating, editing, amending and deleting RFCs is a relatively
+annoying process, and this tool offers an opinionated, relatively standard
+workflow for doing so.
+
+Most git workflows work by using branches and some sort of "please merge this
+branch into another branch", so editing something creates a
+branch_{unimplemented}, you can then use that to work with whatever else.
+
+You can use this to structure your RFC process, you can specify
+templates_{unimplemented} (stored in the configuration directory, where you can
+modify the default templates and/or delete them. Absent templates result in an
+empty file as a starting point.)
+
+** Implementation Details
+*** Configuration files
+=rfcs= stores the configuration it requires under =~/.config/rfcs=, which
+includes some stuff like the required git repository path, and the git
+repository check-out if no other is found.
+
+*** Assumptions, a list
+- =$EDITOR= should be set, it's what's launched for editing an RFC.
+- Your RFC process is broadly similar to code, in that it lives in =git= and
+  uses some sort of review process that is external.
+- You number your RFCs.
