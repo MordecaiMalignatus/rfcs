@@ -7,7 +7,7 @@ some layout expectations.
 ** Quick Start
 1. Clone repository
 2. Run =rake release=
-3. Run ~rfcs --version~ in your shell to check it's there._{unimplemented}
+3. Run ~rfcs --version~ in your shell to check it's there.
 
 ** Why?
 Engineering documents, called "Request for Comments" after the IETF RFCs, are a
@@ -70,3 +70,5 @@ repository check-out if no other is found.
 - Your RFC process is broadly similar to code, in that it lives in =git= and
   uses some sort of review process that is external.
 - You number your RFCs.
+- Your =$HOME= is set to where you keep your config files. (i.e. =$HOME/.config=
+  is a path that makes sense, because =rfcs= will write there.)
