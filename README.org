@@ -37,7 +37,7 @@ The main assumption made is that your RFCs are stored and worked with in =git=.
 else, please file an issue) or a local path to the check-out_{unimplemented}.
 
 The second assumption is that your RFCs are text files (currently recognised:
-=.md=, =.markdown=, =.org=, =.rst=, =.txt=)_{unimplemented}, and the third that
+=.md=, =.markdown=, =.org=, =.rst=, =.txt=, =.adoc=) and the third that
 they have numbers in them. The end result of recognised files looks something
 like =001.md=, or =rfc_1.org=, or =rfc-001.txt=, or
 =011-caches-are-bad-actually.rst=._{unimplemented}
@@ -58,6 +58,23 @@ You can use this to structure your RFC process, you can specify
 templates_{unimplemented} (stored in the configuration directory, where you can
 modify the default templates and/or delete them. Absent templates result in an
 empty file as a starting point.)
+
+** Using =rfcs=
+*** Listing all RFCs
+#+begin_src shell
+$ rfcs list
+#+end_src
+
+Since this requires a configured repository and a local checkout, if they aren't
+configured, the tool will prompt you to do so. If a git URL is present, but no
+local clone of this repository, =rfcs= will clone it to =~/.config/rfcs/rfcs=
+and save that as the local copy.
+
+It then lists all files that:
+- Are some form of recognisable text document (current extensions supported:
+  =txt=, =md=, =markdown=, =rst=, =adoc=, =org=)
+- Have a 3+ numerical ID in the file name._{unimplemented} (example:
+  =001-some-rfc-name-here.txt=)
 
 ** Implementation Details
 *** Configuration files

@@ -1,3 +1,4 @@
+use std::path::Path;
 use std::path::PathBuf;
 
 use anyhow::bail;
@@ -6,13 +7,16 @@ use clap::Parser;
 use clap::Subcommand;
 use serde::Deserialize;
 use serde::Serialize;
+use std::process::Command as Cmd;
 
 #[derive(Debug, Clone, Subcommand)]
 enum Command {
     List,
-    DumpInfo, // Show,
-              // Create,
-              // Edit,
+    DumpInfo,
+    // Show,
+    // Create,
+    // Edit,
+    // Configure,
 }
 
 #[derive(Parser, Debug)]
@@ -30,8 +34,12 @@ fn main() -> Result<()> {
         Command::DumpInfo => cmd_dump_info(config),
     }
 }
-fn cmd_list(_config: Config) -> Result<()> {
-    todo!()
+fn cmd_list(config: Config) -> Result<()> {
+    let files = files_in_rfc_repo(config)?;
+
+    files.iter().for_each(|f| println!("{}", f.display()));
+
+    Ok(())
 }
 
 fn cmd_dump_info(config: Config) -> Result<()> {
@@ -43,10 +51,19 @@ fn cmd_dump_info(config: Config) -> Result<()> {
 
 fn files_in_rfc_repo(config: Config) -> Result<Vec<PathBuf>> {
     match config.git_repo_checkout {
-        Some(p) => {}
+        Some(p) => match std::fs::read_dir(p) {
+            Ok(entries) => Ok(filter_files_for_rfcs(entries)),
+            Err(e) => {
+                bail!("Error while trying to walk directory: {}", e);
+            }
+        },
         None => match config.git_repo_url {
-            Some(url) => {
-                _checkout_git_url_locally(config)?;
+            Some(ref url) => {
+                let config_dir = config_path()?
+                    .parent()
+                    .expect("Config path must have parent")
+                    .to_path_buf();
+                checkout_git_url_locally(config_dir, url.clone())?;
                 files_in_rfc_repo(config)
             }
             None => {
@@ -64,8 +81,67 @@ fn files_in_rfc_repo(config: Config) -> Result<Vec<PathBuf>> {
     }
 }
 
-fn _checkout_git_url_locally(config: Config) -> Result<PathBuf> {
-    todo!()
+fn filter_files_for_rfcs(files: std::fs::ReadDir) -> Vec<PathBuf> {
+    files
+        .into_iter()
+        .filter_map(|dir_entry| match dir_entry {
+            Ok(entry) => Some(entry.path()),
+            Err(err) => {
+                eprintln!("Error while processing/reading a file: {}", err);
+                None
+            }
+        })
+        .filter(|f| file_is_text_document(f))
+        .collect()
+}
+
+fn file_is_text_document(f: &Path) -> bool {
+    match f.extension() {
+        Some(e) => matches!(
+            e.to_str().unwrap(),
+            "txt" | "md" | "markdown" | "rst" | "adoc" | "org"
+        ),
+        None => false,
+    }
+}
+
+fn checkout_git_url_locally(target_location: PathBuf, url: String) -> Result<PathBuf> {
+    eprintln!("Cloning git repository from URL: '{}'", url);
+
+    let mut repo = target_location.clone();
+    repo.push("rfcs");
+
+    let command_result = Cmd::new("git")
+        .arg("clone")
+        .arg(&url)
+        .arg("rfcs")
+        .current_dir(target_location)
+        .output();
+
+    match command_result {
+        Ok(output) => match output.status.success() {
+            true => {
+                eprintln!(
+                    "Successfully cloned git repository to path '{}'",
+                    repo.display()
+                );
+                Ok(repo)
+            }
+            false => {
+                eprintln!("Error while cloning repository from URL {}, ", url);
+                eprintln!(
+                    "output: \n\nStderr: {}\nStdout:{}",
+                    String::from_utf8(output.stderr).unwrap(),
+                    String::from_utf8(output.stdout).unwrap()
+                );
+                bail!("Can't proceed any further without a repository present.")
+            }
+        },
+        Err(e) => {
+            eprintln!("Error while trying to clone git repository: {}", e);
+            bail!("Can't proceed any further without a repository present.")
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
