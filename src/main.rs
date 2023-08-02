@@ -5,6 +5,7 @@ use anyhow::bail;
 use anyhow::Result;
 use clap::Parser;
 use clap::Subcommand;
+use regex::Regex;
 use serde::Deserialize;
 use serde::Serialize;
 use std::process::Command as Cmd;
@@ -34,8 +35,10 @@ fn main() -> Result<()> {
         Command::DumpInfo => cmd_dump_info(config),
     }
 }
+
 fn cmd_list(config: Config) -> Result<()> {
-    let files = files_in_rfc_repo(config)?;
+    let path = ensure_local_repo(config.git_repo_url, config.git_repo_checkout)?;
+    let files = files_in_rfc_repo(path)?;
 
     files.iter().for_each(|f| println!("{}", f.display()));
 
@@ -49,33 +52,33 @@ fn cmd_dump_info(config: Config) -> Result<()> {
     Ok(())
 }
 
-fn files_in_rfc_repo(config: Config) -> Result<Vec<PathBuf>> {
-    match config.git_repo_checkout {
-        Some(p) => match std::fs::read_dir(p) {
-            Ok(entries) => Ok(filter_files_for_rfcs(entries)),
-            Err(e) => {
-                bail!("Error while trying to walk directory: {}", e);
-            }
-        },
-        None => match config.git_repo_url {
+fn files_in_rfc_repo(local_repo: PathBuf) -> Result<Vec<PathBuf>> {
+    match std::fs::read_dir(local_repo) {
+        Ok(entries) => Ok(filter_files_for_rfcs(entries)),
+        Err(e) => {
+            bail!("Error while trying to walk directory: {}", e);
+        }
+    }
+}
+
+fn ensure_local_repo(url: Option<String>, path: Option<PathBuf>) -> Result<PathBuf> {
+    match path {
+        Some(p) => Ok(p),
+        None => match url {
             Some(ref url) => {
                 let config_dir = config_path()?
                     .parent()
                     .expect("Config path must have parent")
                     .to_path_buf();
-                checkout_git_url_locally(config_dir, url.clone())?;
-                files_in_rfc_repo(config)
+                checkout_git_url_locally(config_dir, url.clone())
             }
             None => {
-                eprintln!(
+                bail!(
                     "No local git repo configured, and no git URL given, \
-                           can't do anything."
-                );
-                eprintln!(
-                    "To configure, run `rfcs configure git-url <git URL>`, \
-                          or `rfcs configure git-checkout /path/to/rfcs`."
-                );
-                bail!("Can't do anything.")
+                     can't do anything.\n \
+                     To configure, run `rfcs configure git-url <git URL>`, \
+                     or `rfcs configure git-checkout /path/to/rfcs`."
+                )
             }
         },
     }
@@ -92,6 +95,7 @@ fn filter_files_for_rfcs(files: std::fs::ReadDir) -> Vec<PathBuf> {
             }
         })
         .filter(|f| file_is_text_document(f))
+        .filter(|f| file_has_rfc_id(f))
         .collect()
 }
 
@@ -101,6 +105,22 @@ fn file_is_text_document(f: &Path) -> bool {
             e.to_str().unwrap(),
             "txt" | "md" | "markdown" | "rst" | "adoc" | "org"
         ),
+        None => false,
+    }
+}
+
+/// We merely look for three consecutive digits in combination with the file
+/// extension.
+const RFC_REGEX_PATTERN: &str = r"\d{3,}";
+
+fn file_has_rfc_id(f: &Path) -> bool {
+    let re = Regex::new(RFC_REGEX_PATTERN).expect("Can't compile RFC regex");
+
+    match f.file_name() {
+        Some(name) => match name.to_str() {
+            Some(name) => re.is_match(name),
+            None => false,
+        },
         None => false,
     }
 }

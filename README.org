@@ -40,7 +40,7 @@ The second assumption is that your RFCs are text files (currently recognised:
 =.md=, =.markdown=, =.org=, =.rst=, =.txt=, =.adoc=) and the third that
 they have numbers in them. The end result of recognised files looks something
 like =001.md=, or =rfc_1.org=, or =rfc-001.txt=, or
-=011-caches-are-bad-actually.rst=._{unimplemented}
+=011-caches-are-bad-actually.rst=.
 
 You will be able to tweak this behaviour via the config file,
 eventually._{unimplemented}
@@ -73,7 +73,7 @@ and save that as the local copy.
 It then lists all files that:
 - Are some form of recognisable text document (current extensions supported:
   =txt=, =md=, =markdown=, =rst=, =adoc=, =org=)
-- Have a 3+ numerical ID in the file name._{unimplemented} (example:
+- Have a 3+ numerical ID in the file name. (example:
   =001-some-rfc-name-here.txt=)
 
 ** Implementation Details
