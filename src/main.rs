@@ -48,7 +48,7 @@ fn cmd_list(config: Config) -> Result<()> {
 }
 
 fn cmd_dump_info(config: Config) -> Result<()> {
-    println!("Configuration location: {}", config_path()?.display());
+    println!("Configuration location: {}", config_path().display());
     println!(
         "git.repo: {:?}",
         config.git.as_ref().and_then(|g| g.repo.as_ref())
@@ -144,7 +144,7 @@ fn ensure_local_repo(git: Option<Git>) -> Result<PathBuf> {
             Some(repo) => Ok(repo),
             None => match g.url {
                 Some(ref url) => {
-                    let config_dir = config_path()?
+                    let config_dir = config_path()
                         .parent()
                         .expect("Config path must have parent")
                         .to_path_buf();
@@ -234,9 +234,10 @@ fn checkout_git_url_locally(target_location: PathBuf, url: String) -> Result<Pat
     }
 }
 
-fn config_path() -> Result<PathBuf> {
-    let home = std::env::var("HOME")?;
-    Ok([&home, ".config", "rfcs", "config.toml"].iter().collect())
+fn config_path() -> PathBuf {
+    let home = std::env::var("HOME").expect("$HOME isn't set, can't proceed.");
+
+    [&home, ".config", "rfcs", "config.toml"].iter().collect()
 }
 
 fn default_config() -> Config {
@@ -244,7 +245,7 @@ fn default_config() -> Config {
 }
 
 fn load_config() -> Result<Config> {
-    match fs::read_to_string(config_path()?) {
+    match fs::read_to_string(config_path()) {
         Ok(content) => Ok(toml::from_str(&content)?),
         Err(e) => match e.kind() {
             std::io::ErrorKind::NotFound => {
@@ -255,7 +256,7 @@ fn load_config() -> Result<Config> {
             _ => {
                 let context = format!(
                     "Unexpected error when reading config file from {}",
-                    config_path()?.display()
+                    config_path().display()
                 );
                 Err(anyhow::Error::new(e).context(context))
             }
@@ -264,7 +265,7 @@ fn load_config() -> Result<Config> {
 }
 
 fn write_config(config: Config) -> Result<()> {
-    let p = config_path()?;
+    let p = config_path();
     fs::create_dir_all(p.parent().expect("Config path must have parent"))?;
 
     Ok(fs::write(p, toml::to_string(&config)?)?)
