@@ -32,9 +32,9 @@ them to what programmers already work with a lot, the CLI.
 
 ** How?
 The main assumption made is that your RFCs are stored and worked with in =git=.
-=rfcs= can either work by giving it a URL_{unimplemented} (either starting with
-=http[s]://= or with =git@=, though both are heuristics. If you need something
-else, please file an issue) or a local path to the check-out_{unimplemented}.
+=rfcs= can either work by giving it a URL (either starting with =http[s]://= or
+with =git@=, though both are heuristics. If you need something else, please file
+an issue) or a local path to the check-out.
 
 The second assumption is that your RFCs are text files (currently recognised:
 =.md=, =.markdown=, =.org=, =.rst=, =.txt=, =.adoc=) and the third that
@@ -61,7 +61,7 @@ empty file as a starting point.)
 
 ** Using =rfcs=
 *** Listing all RFCs
-#+begin_src shell
+#+begin_src
 $ rfcs list
 #+end_src
 
@@ -75,6 +75,15 @@ It then lists all files that:
   =txt=, =md=, =markdown=, =rst=, =adoc=, =org=)
 - Have a 3+ numerical ID in the file name. (example:
   =001-some-rfc-name-here.txt=)
+
+*** Configuring =rfcs= itself
+#+begin_src
+$ rfcs configure git.repo ~/some/path/to/the/repo
+#+end_src
+
+As far as this is possible, the value is validated for eligibility when calling
+=configure=. A list of possible configuration keys can be seen with =rfcs
+configure --list-keys=_{unimplemented}.
 
 ** Implementation Details
 *** Configuration files

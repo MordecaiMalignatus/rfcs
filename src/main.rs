@@ -14,10 +14,10 @@ use std::process::Command as Cmd;
 enum Command {
     List,
     DumpInfo,
+    Configure { key: String, value: String },
     // Show,
     // Create,
     // Edit,
-    // Configure,
 }
 
 #[derive(Parser, Debug)]
@@ -33,11 +33,12 @@ fn main() -> Result<()> {
     match args.command {
         Command::List => cmd_list(config),
         Command::DumpInfo => cmd_dump_info(config),
+        Command::Configure { key, value } => cmd_config(config, key, value),
     }
 }
 
 fn cmd_list(config: Config) -> Result<()> {
-    let path = ensure_local_repo(config.git_repo_url, config.git_repo_checkout)?;
+    let path = ensure_local_repo(config.git)?;
     let files = files_in_rfc_repo(path)?;
 
     files.iter().for_each(|f| println!("{}", f.display()));
@@ -47,8 +48,75 @@ fn cmd_list(config: Config) -> Result<()> {
 
 fn cmd_dump_info(config: Config) -> Result<()> {
     println!("Configuration location: {}", config_path()?.display());
-    println!("git_repo_checkout path: {:?}", config.git_repo_checkout);
-    println!("git_repo_url: {:?}", config.git_repo_url);
+    println!(
+        "git.repo: {:?}",
+        config.git.as_ref().and_then(|g| g.repo.as_ref())
+    );
+    println!(
+        "git.url: {:?}",
+        config.git.as_ref().and_then(|g| g.url.as_ref())
+    );
+    Ok(())
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct Config {
+    pub git: Option<Git>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct Git {
+    pub repo: Option<PathBuf>,
+    pub url: Option<String>,
+}
+
+fn cmd_config(mut config: Config, key: String, value: String) -> Result<()> {
+    println!("Setting key {} to value {}", &key, &value);
+    match key.as_str() {
+        "git.url" => {
+            config.git = match config.git {
+                Some(git) => Some(Git {
+                    url: Some(value),
+                    repo: git.repo,
+                }),
+                None => Some(Git {
+                    url: Some(value),
+                    repo: None,
+                }),
+            }
+        }
+        "git.repo" => match PathBuf::try_from(value.clone()) {
+            Ok(path) => {
+                config.git = match config.git {
+                    Some(git) => Some(Git {
+                        url: git.url,
+                        repo: Some(path),
+                    }),
+                    None => Some(Git {
+                        url: None,
+                        repo: Some(path),
+                    }),
+                }
+            }
+            Err(_) => {
+                bail!(
+                    "Was not able to convert given value '{}' into a file path, \
+                       please supply a valid path.",
+                    value
+                )
+            }
+        },
+        _ => {
+            bail!(
+                "Unknown configuration key '{}', known keys: git.url, git.repo",
+                key
+            )
+        }
+    };
+
+    write_config(config)?;
+    println!("Wrote config.");
+
     Ok(())
 }
 
@@ -61,26 +129,34 @@ fn files_in_rfc_repo(local_repo: PathBuf) -> Result<Vec<PathBuf>> {
     }
 }
 
-fn ensure_local_repo(url: Option<String>, path: Option<PathBuf>) -> Result<PathBuf> {
-    match path {
-        Some(p) => Ok(p),
-        None => match url {
-            Some(ref url) => {
-                let config_dir = config_path()?
-                    .parent()
-                    .expect("Config path must have parent")
-                    .to_path_buf();
-                checkout_git_url_locally(config_dir, url.clone())
-            }
-            None => {
-                bail!(
-                    "No local git repo configured, and no git URL given, \
+fn ensure_local_repo(git: Option<Git>) -> Result<PathBuf> {
+    match git {
+        Some(g) => match g.repo {
+            Some(repo) => Ok(repo),
+            None => match g.url {
+                Some(ref url) => {
+                    let config_dir = config_path()?
+                        .parent()
+                        .expect("Config path must have parent")
+                        .to_path_buf();
+                    checkout_git_url_locally(config_dir, url.clone())
+                }
+                None => {
+                    bail!(
+                        "No local git repo configured, and no git URL given, \
                      can't do anything.\n \
                      To configure, run `rfcs configure git-url <git URL>`, \
                      or `rfcs configure git-checkout /path/to/rfcs`."
-                )
-            }
+                    )
+                }
+            },
         },
+        None => bail!(
+            "No local git repo configured, and no git URL given, \
+             can't do anything.\n \
+             To configure, run `rfcs configure git-url <git URL>`, \
+             or `rfcs configure git-checkout /path/to/rfcs`."
+        ),
     }
 }
 
@@ -164,22 +240,13 @@ fn checkout_git_url_locally(target_location: PathBuf, url: String) -> Result<Pat
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct Config {
-    pub git_repo_checkout: Option<PathBuf>,
-    pub git_repo_url: Option<String>,
-}
-
 fn config_path() -> Result<PathBuf> {
     let home = std::env::var("HOME")?;
     Ok([&home, ".config", "rfcs", "config.toml"].iter().collect())
 }
 
 fn default_config() -> Config {
-    Config {
-        git_repo_checkout: None,
-        git_repo_url: None,
-    }
+    Config { git: None }
 }
 
 fn load_config() -> Result<Config> {
@@ -187,8 +254,9 @@ fn load_config() -> Result<Config> {
         Ok(content) => Ok(toml::from_str(&content)?),
         Err(e) => match e.kind() {
             std::io::ErrorKind::NotFound => {
-                write_default_config()?;
-                Ok(default_config())
+                let config = default_config();
+                write_config(config.clone())?;
+                Ok(config)
             }
             _ => {
                 let context = format!(
@@ -201,14 +269,9 @@ fn load_config() -> Result<Config> {
     }
 }
 
-fn write_default_config() -> Result<()> {
+fn write_config(config: Config) -> Result<()> {
     let p = config_path()?;
     std::fs::create_dir_all(p.parent().expect("Config path must have parent"))?;
-    let config = default_config();
 
-    Ok(std::fs::write(
-        p.file_name()
-            .expect("Fixed config path must have file name"),
-        toml::to_string(&config)?,
-    )?)
+    Ok(std::fs::write(p, toml::to_string(&config)?)?)
 }
