@@ -121,12 +121,20 @@ fn cmd_config(mut config: Config, key: String, value: String) -> Result<()> {
 }
 
 fn files_in_rfc_repo(local_repo: PathBuf) -> Result<Vec<PathBuf>> {
-    match std::fs::read_dir(local_repo) {
-        Ok(entries) => Ok(filter_files_for_rfcs(entries)),
-        Err(e) => {
-            bail!("Error while trying to walk directory: {}", e);
-        }
-    }
+    let res = walkdir::WalkDir::new(local_repo)
+        .into_iter()
+        .filter_map(|dir_entry| match dir_entry {
+            Ok(entry) => Some(PathBuf::from(entry.path())),
+            Err(err) => {
+                eprintln!("Error while processing/reading a file: {}", err);
+                None
+            }
+        })
+        .filter(|f| file_is_text_document(f))
+        .filter(|f| file_has_rfc_id(f))
+        .collect();
+
+    Ok(res)
 }
 
 fn ensure_local_repo(git: Option<Git>) -> Result<PathBuf> {
@@ -158,21 +166,6 @@ fn ensure_local_repo(git: Option<Git>) -> Result<PathBuf> {
              or `rfcs configure git-checkout /path/to/rfcs`."
         ),
     }
-}
-
-fn filter_files_for_rfcs(files: std::fs::ReadDir) -> Vec<PathBuf> {
-    files
-        .into_iter()
-        .filter_map(|dir_entry| match dir_entry {
-            Ok(entry) => Some(entry.path()),
-            Err(err) => {
-                eprintln!("Error while processing/reading a file: {}", err);
-                None
-            }
-        })
-        .filter(|f| file_is_text_document(f))
-        .filter(|f| file_has_rfc_id(f))
-        .collect()
 }
 
 fn file_is_text_document(f: &Path) -> bool {
@@ -274,4 +267,39 @@ fn write_config(config: Config) -> Result<()> {
     std::fs::create_dir_all(p.parent().expect("Config path must have parent"))?;
 
     Ok(std::fs::write(p, toml::to_string(&config)?)?)
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+
+    #[test]
+    fn test_positive_rfc_ids() {
+        let should_match = vec![
+            Path::new("./000-rfc-for-rfcs.md"),
+            Path::new("./001-some-other-rfc.txt"),
+            Path::new("./18215-a-future-rfc.adoc"),
+        ];
+
+        should_match
+            .iter()
+            .for_each(|f| assert!(file_has_rfc_id(f)));
+        should_match
+            .iter()
+            .for_each(|f| assert!(file_is_text_document(f)));
+    }
+
+    #[test]
+    fn test_negative_rfc_ids() {
+        let should_not_match = vec![
+            Path::new("./readme.org"),
+            // TODO: There also needs to be negative extension list.
+            Path::new("./91_migration.sql"),
+            Path::new("./src/main.rs"),
+        ];
+
+        should_not_match
+            .iter()
+            .for_each(|f| assert!(!(file_has_rfc_id(f) && file_is_text_document(f))));
+    }
 }
