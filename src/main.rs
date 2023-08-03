@@ -1,5 +1,6 @@
 use std::path::Path;
 use std::path::PathBuf;
+use std::fs;
 
 use anyhow::bail;
 use anyhow::Result;
@@ -243,7 +244,7 @@ fn default_config() -> Config {
 }
 
 fn load_config() -> Result<Config> {
-    match std::fs::read_to_string(config_path()?) {
+    match fs::read_to_string(config_path()?) {
         Ok(content) => Ok(toml::from_str(&content)?),
         Err(e) => match e.kind() {
             std::io::ErrorKind::NotFound => {
@@ -264,9 +265,9 @@ fn load_config() -> Result<Config> {
 
 fn write_config(config: Config) -> Result<()> {
     let p = config_path()?;
-    std::fs::create_dir_all(p.parent().expect("Config path must have parent"))?;
+    fs::create_dir_all(p.parent().expect("Config path must have parent"))?;
 
-    Ok(std::fs::write(p, toml::to_string(&config)?)?)
+    Ok(fs::write(p, toml::to_string(&config)?)?)
 }
 
 #[cfg(test)]
