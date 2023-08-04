@@ -1,6 +1,6 @@
+use std::fs;
 use std::path::Path;
 use std::path::PathBuf;
-use std::fs;
 
 use anyhow::bail;
 use anyhow::Result;
@@ -11,13 +11,15 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::process::Command as Cmd;
 
+mod git;
+
 #[derive(Debug, Clone, Subcommand)]
 enum Command {
     List,
     DumpInfo,
     Configure { key: String, value: String },
+    Create { title: String },
     // Show,
-    // Create,
     // Edit,
 }
 
@@ -35,12 +37,13 @@ fn main() -> Result<()> {
         Command::List => cmd_list(config),
         Command::DumpInfo => cmd_dump_info(config),
         Command::Configure { key, value } => cmd_config(config, key, value),
+        Command::Create { title } => cmd_create(config, title),
     }
 }
 
 fn cmd_list(config: Config) -> Result<()> {
     let path = ensure_local_repo(config.git)?;
-    let files = files_in_rfc_repo(path)?;
+    let files = files_in_rfc_repo(&path)?;
 
     files.iter().for_each(|f| println!("{}", f.display()));
 
@@ -58,17 +61,6 @@ fn cmd_dump_info(config: Config) -> Result<()> {
         config.git.as_ref().and_then(|g| g.url.as_ref())
     );
     Ok(())
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct Config {
-    pub git: Option<Git>,
-}
-
-#[derive(Debug, Clone, Deserialize, Serialize)]
-struct Git {
-    pub repo: Option<PathBuf>,
-    pub url: Option<String>,
 }
 
 fn cmd_config(mut config: Config, key: String, value: String) -> Result<()> {
@@ -121,7 +113,69 @@ fn cmd_config(mut config: Config, key: String, value: String) -> Result<()> {
     Ok(())
 }
 
-fn files_in_rfc_repo(local_repo: PathBuf) -> Result<Vec<PathBuf>> {
+fn cmd_create(config: Config, title: String) -> Result<()> {
+    let path = ensure_local_repo(config.git)?;
+    let branches = git::list_branches(&path)?;
+    let files = files_in_rfc_repo(&path)?;
+    let next_rfc = next_rfc_number(&branches, &files);
+
+    let branch_name = format!(
+        "{:03}-{}",
+        next_rfc,
+        title.replace(' ', "-").replace([',', '.', '?', '!'], "")
+    );
+    println!("Branch will be named {}", branch_name);
+
+    git::create_and_switch_to_branch(&path, &branch_name)?;
+    println!("Created and checked out git branch {}", branch_name);
+
+    Ok(())
+}
+
+/// Find the next appropriate RFC number by looking through the present files,
+/// and the local git branches, find the highest RFC number, then add one.
+fn next_rfc_number(git_branches: &[String], rfcs_in_repo: &[PathBuf]) -> usize {
+    let re = regex::Regex::new(RFC_REGEX_PATTERN).expect("RFC_REGEX_PATTERN failed to compile.");
+    rfcs_in_repo
+        .iter()
+        .map(|f| f.to_string_lossy().to_string())
+        .chain(git_branches.to_owned())
+        .filter_map(|f| match re.captures(&f) {
+            Some(m) => {
+                let number: usize = m
+                    .name("rfc_number")
+                    .expect(
+                        "A present match with no match for the only capture \
+                         group ought not to happen.",
+                    )
+                    .as_str()
+                    .parse()
+                    .expect(
+                        "A match with a digit regex that does not parse into \
+                         numbers also ought not to happen.",
+                    );
+                Some(number)
+            }
+            // IF no match is present, we simply drop the value. This is here
+            // because while the file-based RFC list might be valid, the git
+            // branches are not validated/searched on retrieval.
+            None => None,
+        })
+        .fold(1, |acc, num| acc.max(num) + 1)
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct Config {
+    pub git: Option<Git>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+struct Git {
+    pub repo: Option<PathBuf>,
+    pub url: Option<String>,
+}
+
+fn files_in_rfc_repo(local_repo: &Path) -> Result<Vec<PathBuf>> {
     let res = walkdir::WalkDir::new(local_repo)
         .into_iter()
         .filter_map(|dir_entry| match dir_entry {
@@ -153,9 +207,9 @@ fn ensure_local_repo(git: Option<Git>) -> Result<PathBuf> {
                 None => {
                     bail!(
                         "No local git repo configured, and no git URL given, \
-                     can't do anything.\n \
-                     To configure, run `rfcs configure git-url <git URL>`, \
-                     or `rfcs configure git-checkout /path/to/rfcs`."
+                         can't do anything.\n \
+                         To configure, run `rfcs configure git-url <git URL>`, \
+                         or `rfcs configure git-checkout /path/to/rfcs`."
                     )
                 }
             },
@@ -181,7 +235,7 @@ fn file_is_text_document(f: &Path) -> bool {
 
 /// We merely look for three consecutive digits in combination with the file
 /// extension.
-const RFC_REGEX_PATTERN: &str = r"\d{3,}";
+const RFC_REGEX_PATTERN: &str = r"(?<rfc_number>\d{3,})";
 
 fn file_has_rfc_id(f: &Path) -> bool {
     let re = Regex::new(RFC_REGEX_PATTERN).expect("Can't compile RFC regex");

@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.71"
 clap = { version = "4.3.11", features = ["derive"] }
+git2 = "0.17.2"
 regex = "1.9.1"
 serde = { version = "1.0.167", features=["serde_derive"] }
 toml = "0.7.6"
