@@ -51,8 +51,8 @@ annoying process, and this tool offers an opinionated, relatively standard
 workflow for doing so.
 
 Most git workflows work by using branches and some sort of "please merge this
-branch into another branch", so editing something creates a
-branch_{unimplemented}, you can then use that to work with whatever else.
+branch into another branch", so editing something creates a branch, you can then
+use that to work with whatever else.
 
 You can use this to structure your RFC process, you can specify
 templates_{unimplemented} (stored in the configuration directory, where you can
@@ -76,6 +76,17 @@ It then lists all files that:
 - Have a 3+ numerical ID in the file name. (example:
   =001-some-rfc-name-here.txt=)
 
+*** Creating a new RFC
+#+begin_src
+$ rfc create 'A new RFC'
+Created and checked out git branch 003-A-new-RFC
+#+end_src
+
+This figures out the next RFC number, and creates a branch targeting it. It
+takes into account all files that already exist in the repository, as well as
+the *names* of all local git branches, to ensure no collisions with other
+in-flight RFCs.
+
 *** Configuring =rfcs= itself
 #+begin_src
 $ rfcs configure git.repo ~/some/path/to/the/repo
@@ -95,6 +106,7 @@ repository check-out if no other is found.
 - =$EDITOR= should be set, it's what's launched for editing an RFC.
 - Your RFC process is broadly similar to code, in that it lives in =git= and
   uses some sort of review process that is external.
-- You number your RFCs.
+- You number your RFCs, sequentially, starting at 001.
+- You zero-pad your numbers to 3 digits when below 999.
 - Your =$HOME= is set to where you keep your config files. (i.e. =$HOME/.config=
   is a path that makes sense, because =rfcs= will write there.)
