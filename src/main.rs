@@ -161,7 +161,7 @@ fn next_rfc_number(git_branches: &[String], rfcs_in_repo: &[PathBuf]) -> usize {
             // branches are not validated/searched on retrieval.
             None => None,
         })
-        .fold(1, |acc, num| acc.max(num) + 1)
+        .fold(1, |acc, num| acc.max(num)) + 1
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
